@@ -7,15 +7,15 @@ import pandas as pd
 import tempfile
 
 # Function to initialize Spark session
-def initialize_spark(gcs_bucket_url, gcp_access_key):
+def initialize_spark(gcs_bucket_url, gcp_access_key, iceberg_catalog):
     iceberg_jar_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "iceberg-spark-runtime-3.5_2.12-1.7.0.jar")
     gcs_connector_jar_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gcs-connector-hadoop2-latest.jar")
 
     spark = SparkSession.builder \
         .appName("Iceberg Query Engine") \
-        .config("spark.sql.catalog.ice", "org.apache.iceberg.spark.SparkCatalog") \
-        .config("spark.sql.catalog.ice.type", "hadoop") \
-        .config("spark.sql.catalog.ice.warehouse", f"gs://{gcs_bucket_url}/warehouse") \
+        .config("spark.sql.catalog." + iceberg_catalog, "org.apache.iceberg.spark.SparkCatalog") \
+        .config("spark.sql.catalog." + iceberg_catalog + ".type", "hadoop") \
+        .config("spark.sql.catalog." + iceberg_catalog + ".warehouse", f"gs://{gcs_bucket_url}/warehouse") \
         .config("spark.hadoop.fs.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem") \
         .config("spark.hadoop.fs.gs.auth.service.account.json.keyfile", gcp_access_key) \
         .config("spark.jars", iceberg_jar_path + "," + gcs_connector_jar_path) \
@@ -94,20 +94,22 @@ def display_results(df):
 
 # Main function to set up the Streamlit app
 def main():
-    # User inputs for GCS bucket and GCP JSON key
+    # User inputs for GCS bucket, GCP JSON key, and Iceberg catalog
     st.title("Iceberg Query Engine")
     
+    iceberg_catalog = st.text_input("Enter your Iceberg catalog name:", "ice")
     gcs_bucket_url = st.text_input("Enter your GCS bucket URL:", "iceberg-storage")
     gcp_access_key = st.file_uploader("Upload your GCP service account JSON key:", type=["json"])
+    
 
-    if gcs_bucket_url and gcp_access_key:
+    if gcs_bucket_url and gcp_access_key and iceberg_catalog:
         # Use tempfile to create a temp directory for the JSON key on all platforms
         with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
             gcp_access_key_path = tmp_file.name
             tmp_file.write(gcp_access_key.getbuffer())
 
-        # Initialize Spark session with the user-provided credentials
-        spark = initialize_spark(gcs_bucket_url, gcp_access_key_path)
+        # Initialize Spark session with the user-provided credentials and catalog name
+        spark = initialize_spark(gcs_bucket_url, gcp_access_key_path, iceberg_catalog)
 
         # SQL query input from the user
         query = st.text_area("Enter your SQL Query:")
